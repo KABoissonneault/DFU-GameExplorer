@@ -1,0 +1,11 @@
+{
+    "ModTitle": "Game Explorer",
+    "ModVersion": "0.1",
+    "ModAuthor": "Kab the Bird Ranger",
+    "DFUnity_Version": "0.11.1",
+    "GUID": "e782bd9e-cca7-45d5-8a72-337af9a461a1",
+    "Files": [
+        "Assets/Game/Mods/Game Explorer/GameExplorer.dfmod.json",
+        "Assets/Game/Mods/Game Explorer/Scripts/GameExplorer.cs"
+    ]
+}
