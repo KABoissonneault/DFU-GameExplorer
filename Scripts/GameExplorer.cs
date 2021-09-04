@@ -122,51 +122,195 @@ public class GameExplorer : MonoBehaviour
         return $"Careers dumped in {careersOutputFilename}";
     }
 
-    string BlocksUsage = "print_blocks_using <model name>";
+    string BlocksUsage = "print_blocks_using model <model name>\nprint_blocks_using flat [archive <archive id>] [record <record id>] [faction <faction id>]";
 
     string PrintBlocksUsingModel(params string[] args)
     {
         if (args.Length == 0)
-            return "error: expected model name";
+            return $"error: expected arguments\n{BlocksUsage}";
 
-        string model = args[0];
-
-        List<string> output = new List<string>();
-
-        BsaFile blockBsa = DaggerfallUnity.Instance.ContentReader.BlockFileReader.BsaFile;
-        for (int b = 0; b < blockBsa.Count; b++)
+        if (args[0].ToLower() == "model")
         {
-            RMBLayout.GetBlockData(blockBsa.GetRecordName(b), out DFBlock blockData);
-            if (blockData.Type != DFBlock.BlockTypes.Rmb)
-                continue;
+            if (args.Length < 2)
+                return $"error: expected model name after 'model'\n{BlocksUsage}";
 
-            bool added = false;
-            foreach(DFBlock.RmbSubRecord subrecord in blockData.RmbBlock.SubRecords)
-            {
-                DFBlock.RmbBlock3dObjectRecord found = subrecord.Exterior.Block3dObjectRecords.FirstOrDefault(record => record.ModelId == model);
-                if(!string.IsNullOrEmpty(found.ModelId))
-                {
-                    output.Add(blockData.Name);
-                    added = true;
-                    break;
-                }
-            }
+            string model = args[1];
 
-            if (!added)
+            List<string> output = new List<string>();
+
+            BsaFile blockBsa = DaggerfallUnity.Instance.ContentReader.BlockFileReader.BsaFile;
+            for (int b = 0; b < blockBsa.Count; b++)
             {
-                DFBlock.RmbBlock3dObjectRecord found = blockData.RmbBlock.Misc3dObjectRecords.FirstOrDefault(record => record.ModelId == model);
-                if (!string.IsNullOrEmpty(found.ModelId))
-                {
-                    output.Add(blockData.Name);
+                RMBLayout.GetBlockData(blockBsa.GetRecordName(b), out DFBlock blockData);
+                if (blockData.Type != DFBlock.BlockTypes.Rmb)
                     continue;
+
+                bool added = false;
+                foreach (DFBlock.RmbSubRecord subrecord in blockData.RmbBlock.SubRecords)
+                {
+                    DFBlock.RmbBlock3dObjectRecord found = subrecord.Exterior.Block3dObjectRecords.FirstOrDefault(record => record.ModelId == model);
+                    if (!string.IsNullOrEmpty(found.ModelId))
+                    {
+                        output.Add(blockData.Name);
+                        added = true;
+                        break;
+                    }
+                }
+
+                if (!added)
+                {
+                    DFBlock.RmbBlock3dObjectRecord found = blockData.RmbBlock.Misc3dObjectRecords.FirstOrDefault(record => record.ModelId == model);
+                    if (!string.IsNullOrEmpty(found.ModelId))
+                    {
+                        output.Add(blockData.Name);
+                        continue;
+                    }
+                }
+
+            }
+
+            if (output.Count == 0)
+                return $"Model '{model}' is unused";
+
+
+            return $"Model used in: {string.Join(", ", output)}";
+        }
+        else if(args[0].ToLower() == "flat")
+        {
+            if (args.Length < 2)
+                return $"error: expected key arguments after 'flat'\n{BlocksUsage}";
+
+            int? archive = null;
+            int? record = null;
+            int? faction = null;
+
+            for(int i = 1; i < args.Length; i += 2)
+            {
+                if(i + 1 >= args.Length)
+                    return $"error: expected parameter after key argument '{args[i]}'\n{BlocksUsage}";
+
+                switch (args[i].ToLower())
+                {
+                    case "archive":
+                        archive = int.Parse(args[i + 1]);
+                        break;
+
+                    case "record":
+                        record = int.Parse(args[i + 1]);
+                        break;
+
+                    case "faction":
+                        faction = int.Parse(args[i + 1]);
+                        break;
                 }
             }
 
+            List<string> output = new List<string>();
+
+            BsaFile blockBsa = DaggerfallUnity.Instance.ContentReader.BlockFileReader.BsaFile;
+            for (int b = 0; b < blockBsa.Count; b++)
+            {
+                RMBLayout.GetBlockData(blockBsa.GetRecordName(b), out DFBlock blockData);
+                if (blockData.Type != DFBlock.BlockTypes.Rmb)
+                    continue;
+
+                bool found = false;
+                for (int i = 0; i < blockData.RmbBlock.MiscFlatObjectRecords.Length; ++i)
+                {
+                    ref DFBlock.RmbBlockFlatObjectRecord flatRecord = ref blockData.RmbBlock.MiscFlatObjectRecords[i];
+                    if (
+                        (!archive.HasValue || flatRecord.TextureArchive == archive.Value)
+                        && (!record.HasValue || flatRecord.TextureRecord == record.Value)
+                        && (!faction.HasValue || flatRecord.FactionID == faction.Value))
+                    {
+                        output.Add(blockData.Name);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found)
+                    continue;
+
+                for (int i = 0; i < blockData.RmbBlock.SubRecords.Length; ++i)
+                {
+                    ref DFBlock.RmbSubRecord subRecord = ref blockData.RmbBlock.SubRecords[i];
+
+                    for (int j = 0; j < subRecord.Exterior.BlockFlatObjectRecords.Length; ++j)
+                    {
+                        ref DFBlock.RmbBlockFlatObjectRecord flatRecord = ref subRecord.Exterior.BlockFlatObjectRecords[j];
+                        if (
+                        (!archive.HasValue || flatRecord.TextureArchive == archive.Value)
+                        && (!record.HasValue || flatRecord.TextureRecord == record.Value)
+                        && (!faction.HasValue || flatRecord.FactionID == faction.Value))
+                        {
+                            output.Add(blockData.Name);
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (found)
+                        break;
+
+                    for (int j = 0; j < subRecord.Exterior.BlockPeopleRecords.Length; ++j)
+                    {
+                        ref DFBlock.RmbBlockPeopleRecord peopleRecord = ref subRecord.Exterior.BlockPeopleRecords[j];
+                        if (
+                        (!archive.HasValue || peopleRecord.TextureArchive == archive.Value)
+                        && (!record.HasValue || peopleRecord.TextureRecord == record.Value)
+                        && (!faction.HasValue || peopleRecord.FactionID == faction.Value))
+                        {
+                            output.Add(blockData.Name);
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (found)
+                        break;
+
+                    for (int j = 0; j < subRecord.Interior.BlockFlatObjectRecords.Length; ++j)
+                    {
+                        ref DFBlock.RmbBlockFlatObjectRecord flatRecord = ref subRecord.Interior.BlockFlatObjectRecords[j];
+                        if (
+                        (!archive.HasValue || flatRecord.TextureArchive == archive.Value)
+                        && (!record.HasValue || flatRecord.TextureRecord == record.Value)
+                        && (!faction.HasValue || flatRecord.FactionID == faction.Value))
+                        {
+                            output.Add(blockData.Name);
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (found)
+                        break;
+
+                    for (int j = 0; j < subRecord.Interior.BlockPeopleRecords.Length; ++j)
+                    {
+                        ref DFBlock.RmbBlockPeopleRecord peopleRecord = ref subRecord.Interior.BlockPeopleRecords[j];
+                        if (
+                        (!archive.HasValue || peopleRecord.TextureArchive == archive.Value)
+                        && (!record.HasValue || peopleRecord.TextureRecord == record.Value)
+                        && (!faction.HasValue || peopleRecord.FactionID == faction.Value))
+                        {
+                            output.Add(blockData.Name);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (output.Count == 0)
+                return $"No such flat in block data";
+
+            return $"Flat found in: {string.Join(", ", output)}";
         }
-
-        if (output.Count == 0)
-            return $"Model '{model}' is unused";
-
-        return $"Model used in: {string.Join(", ", output)}";
+        else
+        {
+            return $"error: unknown arguments '{args[0]}'";
+        }
     }
 }
